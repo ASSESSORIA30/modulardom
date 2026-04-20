@@ -1,9 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, lazy, Suspense } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import SplitType from 'split-type'
 import { ArrowDown, ArrowUpRight } from 'lucide-react'
-import ModularHouse3D from './ModularHouse3D'
+
+// Lazy-load the 3D scene so the initial page paint is instant.
+// The heavy Three.js chunk only downloads AFTER the rest of the page is interactive.
+const ModularHouse3D = lazy(() => import('./ModularHouse3D'))
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -14,22 +17,22 @@ export default function Hero() {
   const metaRef = useRef(null)
   const ctaRef = useRef(null)
   const sideRef = useRef(null)
+  const canvasWrapRef = useRef(null)
   const scrollRef = useRef(0)
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // Split title into words/chars
       const split = new SplitType(titleRef.current, {
         types: 'lines,words',
         lineClass: 'reveal-line',
       })
 
-      // Initial reveal
       gsap.set(split.words, { yPercent: 110 })
       gsap.set([subtitleRef.current, metaRef.current, ctaRef.current, sideRef.current], {
         opacity: 0,
         y: 30,
       })
+      gsap.set(canvasWrapRef.current, { opacity: 0 })
 
       const tl = gsap.timeline({ delay: 0.3 })
       tl.to(split.words, {
@@ -38,28 +41,13 @@ export default function Hero() {
         ease: 'expo.out',
         stagger: 0.06,
       })
-        .to(
-          subtitleRef.current,
-          { opacity: 1, y: 0, duration: 1, ease: 'expo.out' },
-          '-=1'
-        )
-        .to(
-          metaRef.current,
-          { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' },
-          '-=0.8'
-        )
-        .to(
-          ctaRef.current,
-          { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' },
-          '-=0.7'
-        )
-        .to(
-          sideRef.current,
-          { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' },
-          '-=0.7'
-        )
+        .to(subtitleRef.current, { opacity: 1, y: 0, duration: 1, ease: 'expo.out' }, '-=1')
+        .to(metaRef.current, { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' }, '-=0.8')
+        .to(ctaRef.current, { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' }, '-=0.7')
+        .to(sideRef.current, { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' }, '-=0.7')
+        // 3D fades in last
+        .to(canvasWrapRef.current, { opacity: 1, duration: 1.8, ease: 'power2.out' }, '-=0.5')
 
-      // Scroll-driven subtle parallax
       ScrollTrigger.create({
         trigger: heroRef.current,
         start: 'top top',
@@ -92,9 +80,15 @@ export default function Hero() {
       ref={heroRef}
       className="relative min-h-screen w-full overflow-hidden bg-cream-200 arch-grid"
     >
-      {/* 3D house layer */}
-      <div className="absolute inset-0 pointer-events-none">
-        <ModularHouse3D scrollRef={scrollRef} className="w-full h-full" />
+      {/* 3D house layer — lazy loaded, fades in after content */}
+      <div
+        ref={canvasWrapRef}
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
+      >
+        <Suspense fallback={null}>
+          <ModularHouse3D scrollRef={scrollRef} className="w-full h-full" />
+        </Suspense>
       </div>
 
       {/* Top status bar */}
@@ -186,7 +180,6 @@ export default function Hero() {
           </button>
         </div>
 
-        {/* Bottom status line */}
         <div
           ref={sideRef}
           className="mt-12 md:mt-20 pt-6 border-t border-navy-700/10 flex flex-col md:flex-row justify-between gap-4 text-xs md:text-sm text-navy-700/60"
